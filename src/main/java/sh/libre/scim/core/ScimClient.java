@@ -51,7 +51,8 @@ public class ScimClient {
         switch (model.get("auth-mode")) {
             case "BEARER":
                 defaultHeaders.put(HttpHeaders.AUTHORIZATION,
-                    BearerAuthentication(model.get("auth-pass")));
+                    BearerAuthentication(model.get("auth-bearer-scheme"),
+                                         model.get("auth-pass")));
                 break;
             case "BASIC_AUTH":
                 defaultHeaders.put(HttpHeaders.AUTHORIZATION,
@@ -92,8 +93,8 @@ public class ScimClient {
         .build();
     }
 
-    protected String BearerAuthentication(String token) {
-        return "Bearer " + token ;
+    protected String BearerAuthentication(String prefix, String token) {
+        return prefix + " " + token ;
     }
 
     protected String genScimUrl(String scimEndpoint, String resourcePath) {
