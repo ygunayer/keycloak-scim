@@ -20,6 +20,11 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
+    - name: Setup Gradle 8.10
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        gradle-version: '8.14'
+
     - name: Build with Gradle
       run: gradle shadowJar
 
