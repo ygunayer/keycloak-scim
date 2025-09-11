@@ -1,9 +1,5 @@
-.gradle
 .github
 .idea
 .vscode
 build
-gradle/
-gradlew
-gradlew.bat
 docs/
