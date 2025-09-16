@@ -7,7 +7,7 @@ RUN chmod +x gradlew
 COPY src/ src/
 RUN ./gradlew jar shadowJar --no-daemon
 
-FROM quay.io/keycloak/keycloak:26.3.3
-RUN mkdir -p /opt/keycloak/providers/
-COPY --from=build /app/build/libs/*-all.jar /opt/keycloak/providers/
-CMD start-dev
+FROM bitnami/keycloak:26.3.3
+COPY --from=build /app/build/libs/*-all.jar /opt/bitnami/keycloak/providers/keycloak-scim-1.0-SNAPSHOT-all.jar
+RUN kc.sh build
+CMD ["/opt/bitnami/scripts/keycloak/run.sh"]
