@@ -109,8 +109,10 @@ public abstract class Adapter<M extends RoleMapperModel, S extends ResourceNode>
         return null;
     }
 
-    public void saveMapping() {
-        this.em.persist(toMapping());
+    public ScimResource saveMapping() {
+        var mapping = toMapping();
+        this.em.persist(mapping);
+        return mapping;
     }
 
     public void deleteMapping() {

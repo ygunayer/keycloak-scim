@@ -103,6 +103,16 @@ public class ScimClient {
                 resourcePath);
     }
 
+    /**
+     * Custom success check that accepts both 200 and 201 as successful responses
+     * This handles SCIM servers that return 200 instead of 201 for resource creation
+     */
+    protected <S extends ResourceNode> boolean isSuccessfulResponse(ServerResponse<S> response) {
+        int statusCode = response.getHttpStatus();
+        // Accept both 200 OK and 201 Created as successful responses
+        return response.isSuccess() || statusCode == 200;
+    }
+
 
     protected EntityManager getEM() {
         return session.getProvider(JpaConnectionProvider.class).getEntityManager();
@@ -130,29 +140,28 @@ public class ScimClient {
             return;
         }
         // If mapping exist then it was created by import so skip.
-        if (adapter.query("findById", adapter.getId()).getResultList().size() != 0) {
+        if (!adapter.query("findById", adapter.getId()).getResultList().isEmpty()) {
+            LOGGER.infof("[create] %s with ID %s already exists on the target, skipping", adapter.getType(), adapter.getId());
             return;
         }
-        var retry = registry.retry("create-" + adapter.getId());
 
-        ServerResponse<S> response = retry.executeSupplier(() -> {
-            try {
-                return scimRequestBuilder
-                .create(adapter.getResourceClass(), ("/" + adapter.getSCIMEndpoint()).formatted())
-                .setResource(adapter.toSCIM(false))
-                .sendRequest();
-            } catch (ResponseException e) {
-                throw new RuntimeException(e);
-            }
+        var retry = registry.retry("create-" + adapter.getId());
+        var response = retry.executeSupplier(() -> {
+            return scimRequestBuilder
+            .create(adapter.getResourceClass(), ("/" + adapter.getSCIMEndpoint()).formatted())
+            .setResource(adapter.toSCIM(false))
+            .sendRequest();
         });
 
-        if (!response.isSuccess()){
-            LOGGER.warn(response.getResponseBody());
-            LOGGER.warn(response.getHttpStatus());
+        // Custom success check - accept both 200 and 201 as successful responses
+        if (!isSuccessfulResponse(response)){
+            LOGGER.errorf("[create] Failed to create %s with ID %s and external ID %s. Received response (%s): %s", adapter.getType(), adapter.getId(), adapter.getExternalId(), response.getHttpStatus(), response.getResponseBody());
+            return;
         }
 
-        adapter.apply(response.getResource());
-        adapter.saveMapping();
+        adapter.apply(response.getResource(adapter.getResourceClass()));
+        var mapping = adapter.saveMapping();
+        LOGGER.infof("[create] Created %s with ID %s and external ID %s", mapping.getType(), mapping.getId(), mapping.getExternalId());
     };
 
     public <M extends RoleMapperModel, S extends ResourceNode, A extends Adapter<M, S>> void replace(Class<A> aClass,
@@ -185,9 +194,10 @@ public class ScimClient {
                     throw new RuntimeException(e);
                 }
             });
-            if (!response.isSuccess()){
-                LOGGER.warn(response.getResponseBody());
-                LOGGER.warn(response.getHttpStatus());
+            if (!isSuccessfulResponse(response)){
+                LOGGER.warnf("[replace] Failed to update %s with ID %s. Received response (%s): %s", adapter.getType(), adapter.getId(), response.getHttpStatus(), response.getResponseBody());
+            } else {
+                LOGGER.infof("[replace] Updated %s with ID %s and external ID %s", adapter.getType(), adapter.getId(), adapter.getExternalId());
             }
         } catch (NoResultException e) {
             LOGGER.warnf("failed to replace resource %s, scim mapping not found", adapter.getId());
@@ -217,9 +227,10 @@ public class ScimClient {
                 }
             });
 
-            if (!response.isSuccess()){
-                LOGGER.warn(response.getResponseBody());
-                LOGGER.warn(response.getHttpStatus());
+            if (!isSuccessfulResponse(response)){
+                LOGGER.warnf("[delete] Failed to delete %s with ID %s. Received response (%s): %s", adapter.getType(), adapter.getId(), response.getHttpStatus(), response.getResponseBody());
+            } else {
+                LOGGER.infof("[delete] Deleted %s with ID %s", adapter.getType(), adapter.getId());
             }
 
             getEM().remove(resource);

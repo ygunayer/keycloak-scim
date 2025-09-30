@@ -66,24 +66,31 @@ public class ScimEventListenerProvider implements EventListenerProvider {
         }
         if (event.getResourceType() == ResourceType.USER) {
             var userId = matcher.group(1);
-            LOGGER.infof("%s %s", userId, event.getOperationType());
-            if (event.getOperationType() == OperationType.CREATE) {
-                var user = getUser(userId);
-                if (user.isEmailVerified()) {
-                    dispatcher.run(ScimDispatcher.SCOPE_USER, client -> client.create(UserAdapter.class, user));
-                    user.getGroupsStream().forEach(group -> {
-                        dispatcher.run(ScimDispatcher.SCOPE_GROUP, client -> client.replace(GroupAdapter.class, group));
-                    });
-                }
-            }
-            if (event.getOperationType() == OperationType.UPDATE) {
-                var user = getUser(userId);
-                if (user.isEmailVerified()) {
-                    dispatcher.run(ScimDispatcher.SCOPE_USER, client -> client.replace(UserAdapter.class, user));
-                }
-            }
-            if (event.getOperationType() == OperationType.DELETE) {
-                dispatcher.run(ScimDispatcher.SCOPE_USER, client -> client.delete(UserAdapter.class, userId));
+            var user = getUser(userId);
+            var username = user == null ? null : user.getUsername();
+
+            switch (event.getOperationType()) {
+                case CREATE: {
+                    if (user != null && user.isEmailVerified()) {
+                        LOGGER.infof("[onEvent] Creating user with internal ID %s and username %s", userId, username);
+                        dispatcher.run(ScimDispatcher.SCOPE_USER, client -> client.create(UserAdapter.class, user));
+                        user.getGroupsStream().forEach(group -> {
+                            dispatcher.run(ScimDispatcher.SCOPE_GROUP, client -> client.replace(GroupAdapter.class, group));
+                        });
+                    }
+                } break;
+
+                case UPDATE: {
+                    if (user != null && user.isEmailVerified()) {
+                        LOGGER.infof("[onEvent] Updating user with internal ID %s and username %s", userId, username);
+                        dispatcher.run(ScimDispatcher.SCOPE_USER, client -> client.replace(UserAdapter.class, user));
+                    }
+                } break;
+
+                case DELETE: {
+                    LOGGER.infof("[onEvent] Deleting user with internal ID %s and username %s", userId, username);
+                    dispatcher.run(ScimDispatcher.SCOPE_USER, client -> client.delete(UserAdapter.class, userId));
+                } break;
             }
         }
         if (event.getResourceType() == ResourceType.GROUP) {
